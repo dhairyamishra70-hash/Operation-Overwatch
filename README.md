@@ -6,4 +6,5 @@ Strategically deploy automated archers and devastating killstreaks to hold the p
 Manage your tactical funds carefully to upgrade your defenses and ensure your sector survives the relentless siege.
 <hr>
 06/11/2026
+<br>
 Decided how tthe game characters and ocde structure will look like.
