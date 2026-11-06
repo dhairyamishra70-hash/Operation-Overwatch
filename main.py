@@ -19,7 +19,14 @@ from Player import player
 
 # ---------------------------------------------
 
-# 3. Enemy
+# System Initiallization
 
+base = Base()
+
+enemies = []
+archer = []
+arrows = []
+
+enemies_to_spawn = 20
 
 # ---------------------------------------------

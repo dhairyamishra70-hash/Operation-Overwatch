@@ -1,7 +1,5 @@
 # This would be the Enemy class with it's own attributes and methods
 
-import math
-import random
 
 class Enemy:
     def __init__(self, wave_multiplier):
