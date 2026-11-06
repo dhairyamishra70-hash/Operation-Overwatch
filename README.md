@@ -8,3 +8,5 @@ Manage your tactical funds carefully to upgrade your defenses and ensure your se
 06/11/2026
 <br>
 Decided how tthe game characters and ocde structure will look like.
+<br>
+Updated the code with objects and classes.
