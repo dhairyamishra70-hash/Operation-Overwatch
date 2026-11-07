@@ -1,7 +1,7 @@
 # This would be the Wave class with it's own attributes and methods
 
 
-if len(enemies) == 0 and enemies_to_spawn:
+if len(enemies) == 0 and enemies_to_spawnn <= 0:
 
     wave += 1
     enemies_to_spawn = 5 + (wave * 2)
