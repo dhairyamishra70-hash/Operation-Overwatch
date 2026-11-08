@@ -117,4 +117,135 @@ def update (self, dt, base):
         #  health bar
 
         w = self.radius * 2
-        bar = pygame.Rect
+        bar = pygame.Rect(int(self.x) - self.radius, int(self.y) - self.radius - 7, w, 4)
+        pygame.draw.rect(screen, GREY, bar)
+        bar.width = max(0, int(w*self.health / self.max_health))
+        pygame.draw.rect(screen, GREEN, bar)
+
+
+        # Arrow 
+        class Arrow:
+            SPEED = 450
+
+            def __init__(self, x, y,target,damage):
+                self.x = x
+                self.y = y
+                self.target = target
+                self.damage = damage
+                self.alive = True
+
+            def update(self, dt):
+
+                if self.target_is_dead():
+                    self.alive = False
+                    return
+
+                dx = self.target.x - self.x
+                dy = self.target.y - self.y
+                dist = math.hypot(dx, dy)
+                step = self.SPEED * dt
+
+                if dist <= step + self.target.radius:
+                    self.target.health -= self.damage
+                    self.alive = False
+
+                else:
+                    self.x += dx/dist*step
+                    self.y += dy / dist*step
+
+            def draw(self, screen):
+                pygame.draw.circle(screen, WHITE, (int(self.x), int(self.y)),  3)
+
+
+
+#  Game Systems
+class Game:
+    def __init__(self):
+        pygame.init()
+        self.screen = pygame.display.set_mode((WIDTH,HEIGHT))
+        pygame.display.set_caption("Operation Overwatch")
+        self.clock = pygame.time.clock()
+        self.font = pygame.font.SysFont("consolas", 20)
+        self.small_font = pygame.font.SysFont("consolas", 16)
+        self.big_font = pygame.font.SysFont("consolas", 56, bold= True)
+
+    def reset(self):
+        self.state = "playing"
+        self.base = Base()
+        self.enemies = []
+        self.archers = []
+        self.arrows = []
+        self.funds = START_FUNDS
+        self.wave = 0
+        self.kills = 0
+        self.killstreak = 0
+        self.wave_active = False
+        self.countdown = INTERMISSION_TIME
+        self.spawn_queue = []
+        self.spawn_timer = 0.0
+        self.selected = None
+        self.message = ""
+        self.message_timer = 0.0
+        self.flash =  0.0
+
+    def say(self, text):
+        self.message =  text
+        self.message_timer = 2.0
+
+
+    def start_wave(self):
+        self.wave += 1
+        self.wave_active = True
+        count = 4 + 2 * self.wave
+        kinds = ["grunt"]
+        weights = [15]
+        if self.wave >= 2:
+            kinds.append("runner")
+            weights.append(3)
+        if self.wave >= 3:
+            kinds.append("brute")
+            weights.append(1 + self.wave // 3)
+
+        self.spawn.queue = random.choices(kinds,weights, k=count)
+        self.spawn_timer = 0.0
+
+    def update_waves(self, dt):
+        if not self.wave_active:
+            self.countdown -= dt
+            if self.spawn.timer <= 0:
+                self.enemies.append(Enemy(self.spawn_queue.pop(), self.wave))
+                self.spawn_timer = max(0.4, 1.3 - 0.06 *self.wave)
+
+        elif not self.enemies:
+            bonus = 20 + 5 * self.wave
+            self.funds +=  bonus
+            self.say(f"Wave {self.wave} cleared ! + {bonus} funds")
+            self.countdown = INTERMISSION_TIME
+
+    def collect_dead_enemies(self):
+        alive = []
+        for enemy in self.enemies:
+            if enemy.is_dead():
+                self.funds += enemy.reward
+                self.kills += 1
+                self.killstreak += 1
+
+            else:
+                alive.append(enemy)
+                self.enemies = alive
+
+    def use_volley(self):
+        if self.state != "playing":
+            return
+        if self.killstreak <KILLSTREAK_NEEDED:
+            self.say(f"Killstreak {self.killstreak}/{KILLSTREAK_NEEDED} - not ready")
+            return
+        for enemy in self.enemies:
+            enemy.health -= VOLLEY_DAMAGE
+
+        self.collect_dead_enemies()
+        self.killstreak = 0
+        self.flash = 0.25
+        self.say("Dvine Volley !")
+
+        
