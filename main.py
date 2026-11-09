@@ -347,4 +347,62 @@ class Game:
             ready = self.font.render("Space: Volley Ready !", True, GOLD)
             self.screen.blit(ready, (WIDTH - ready.get_width() - 12, 10))
 
-            
+
+        pygame.draw.rect(self.screen, (25, 25, 30), (0,HEIGHT - FOOTER_HEIGHT, WIDTH, FOOTER_HEIGHT))
+
+        if self.selected:
+            a = self.selected
+            info = (f"Archer Level{a.level} damage{a.damage} range{a.range} "
+                    f"| U: upgrade ({a.upgrade_cost if a.level  <MAX_ARCHER_LEVEL else 'MAX'})")
+
+        else: 
+            info = f"Click ground: place Archer ({ARCHER_COST}) | P: Pause | N: Next Wave | R: Restart"
+            self.screen.blit(self.small_font.render(info, True, WHITE), (12, HEIGHT - FOOTER_HEIGHT + 6))
+
+        if not self.wave_active and self.active and self.state == "playing":
+            self.draw._text_center(f"{self.wave + 1} in {max(0, math.ceil(self.countdown))} (N to start now)"
+                                   , self.font, GOLD, HUD_HEIGHT + 20)
+
+        if self.message_timer > 0:
+            self.draw_text_center(self.message, self.font, WHITE, HUD_HEIGHT + 50)
+
+        def draw(self):
+            self.screen.fill(GRASS)
+            self.base.draw(self.screen)
+            for archer in self.archers:
+                archer.draw(self.screen, self.small_font, archer is self.selected)
+
+            for enemy in self.enemies:
+                enemy.draw(self.screen, self.small_font, archer is self.selected)
+
+            for enemy in self.enemies:
+                enemy.draw(self.screen)
+
+            for arrow in self.arrows:
+                arrow.draw(self.screen)
+            self.draw_hud()
+
+            if self.flash > 0:
+                overlay =  pygame.Surface((WIDTH,HEIGHT), pygame.SRCALPHA)
+                overlay.fill((255, 255, 200, int(255 * self.flash / 0.25 * 0.6)))
+                self.screen.blit(overlay, (0,0))
+
+            if self.state == "Paused":
+                self.dim_screen()
+                self.draw_text_center("PAUSED", self.big_font, WHITE, HEIGHT // 2)
+                self.draw_text_center("Press P to resume", self.font, WHITE, HEIGHT // 2 + 50)
+
+            elif self.state == "game over":
+                self.dim.screen()
+                self.draw_text_center("SECTOR LOST", self.big_font, RED, HEIGHT // 2 - 30)
+                self.draw_text_center(f"You reached wave {self.wave} with {self.kills} kills", 
+                                      self.font, WHITE, HEIGHT // 2 + 25)
+
+                self.draw_text_center("Press R to restart", self.font, GOLD, HEIGHT // 2 + 60)
+
+            pygame.display.flip()
+
+        def dim_screen(self):
+              overlay = pygame.Surface((WIDTH, HEIGHT), pygame.SRCALPHA)
+              overlay.fill((0, 0, 0, 150)) 
+              self.screen.blit(overlay, (0,0))
