@@ -36,8 +36,8 @@ INTERMISSION_TIME = 4.0
 # Wave 1
 
 ENEMY_TYPES = {
-    "grunt":  {"health": 35,  "speed": 60,  "damage": 10, "reward": 10, "radius": 10, "color": (200, 70, 70)},
-    "runner": {"health": 25,  "speed": 110, "damage": 8,  "reward": 12, "radius": 8,  "color": (230, 150, 40)},
+    "grunt":  {"health": 35,  "speed": 60,  "damage": 20, "reward": 5, "radius": 10, "color": (200, 70, 70)},
+    "runner": {"health": 70,  "speed": 150, "damage": 25,  "reward": 10, "radius": 8,  "color": (230, 150, 40)},
 }
 #  3. Helper Function
 
@@ -246,6 +246,6 @@ class Game:
         self.collect_dead_enemies()
         self.killstreak = 0
         self.flash = 0.25
-        self.say("Dvine Volley !")
+        self.say("Divine Volley !")
 
         
