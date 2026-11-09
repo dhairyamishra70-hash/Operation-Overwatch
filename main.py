@@ -248,4 +248,103 @@ class Game:
         self.flash = 0.25
         self.say("Divine Volley !")
 
-        
+
+    def handle_click(self, pos):
+        x,y = pos
+        if y < HUD_HEIGHT or y > HEIGHT - FOOTER_HEIGHT:
+            return
+
+        for archer in self.archers:
+            if distance(x,y, archer.x, archer.y) <= 16:
+                self.selected = archer
+                return
+
+        if x > self.base.rect.left - 20:
+            self.say("Too close to the base !")
+        elif any(distance(x,y, a.x,a.y)  <32 for a in self.archers):
+            self.say("Too close to another archer !")
+        elif self.funds < ARCHER_COST:
+            self.say("Not enough funds !")
+
+        else:
+            self.archer -= ARCHER_COST
+            new_archer = archer(x, y)
+            self.archers.append(new_archer)
+            self.selected = new_archer
+
+
+    def upgrade_selected(self):
+        archer =  self.selected
+        if archer is None:
+            self.say("Select an archer !")
+
+        elif archer.level >= MAX_ARCHER_LEVEL:
+            self.say("Archer is ready max level !")
+
+        elif self.funds < archer.upgrade_cost:
+            self.say(f"Need {archer.ipgrade_cost} funds to upgrade")
+
+        else:
+            self.funds -= archer.upgrade.cost
+            archer.upgrade()
+
+
+    def update(self, dt):
+        if self.message_timer > 0:
+            self.message_timer -= dt
+
+        if self.flash > 0:
+            self.flash -= dt
+
+        if self.state != "playing":
+            return
+
+
+        self.update_waves(dt)
+
+
+        stil_walking = []
+        for enemy in self.enemies:
+            enemy.update(dt, self.base)
+
+            if enemy.reached_base(self.base):
+                self.base.take_damage(enemy.damage)
+                self.kilstreak = 0
+
+            else:
+                still_walking.append(enemy) 
+
+        self.enemies = stil_walking
+
+
+        for archer in self.archers:
+            archer.update(dt, self.enemies, self.arrows)
+
+        for arrow in self.arrows:
+            arrow.update(dt)
+        self.arrows = [a for a in self.arrows if a.alive]
+
+        self.collect_dead_enemies()
+
+        if self.base.is_destroyed():
+            self.state = "game over"
+
+
+
+    def draw_text_center(self, text, font, color, y):
+        surf = font.render(text, True, color)
+        self.screen.blit(surf, surf.get_rect(center = (WIDTH // 2)))
+
+
+    def draw_hud(self):
+        pygame.draw.rect(self.screen,  (25, 25, 30), (0, 0, WIDTH, HUD_HEIGHT))
+        text = (f"Wave: {self.wave} | Funds: {self.funds} | "
+                f"Base HP: {self.base.health} | "
+                f"Killstreak: {self.killstreak}/{KILLSTREAK_NEEDED}")
+
+        self.screen.blit(self.font.render(text, True, WHITE), (12, 10))
+        if self.killstreak >= KILLSTREAK_NEEDED:
+            ready = self.font.render("Space: Volley Ready !", True, GOLD)
+            self.screen.blit(ready, (WIDTH - ready.get_width() - 12, 10))
+
+            
