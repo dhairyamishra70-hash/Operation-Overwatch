@@ -246,3 +246,74 @@ class Game:
               overlay = pygame.Surface((WIDTH, HEIGHT), pygame.SRCALPHA)
               overlay.fill((0, 0, 0, 150)) 
               self.screen.blit(overlay, (0,0))
+
+              
+            if self.state == "Paused":
+                self.dim_screen()
+                self.draw_text_center("PAUSED", self.big_font, WHITE, HEIGHT // 2)
+                self.draw_text_center("Press P to resume", self.font, WHITE, HEIGHT // 2 + 50)
+
+            elif self.state == "game over":
+                self.dim.screen()
+                self.draw_text_center("SECTOR LOST", self.big_font, RED, HEIGHT // 2 - 30)
+                self.draw_text_center(f"You reached wave {self.wave} with {self.kills} kills", 
+                                      self.font, WHITE, HEIGHT // 2 + 25)
+
+                self.draw_text_center("Press R to restart", self.font, GOLD, HEIGHT // 2 + 60)
+
+            pygame.display.flip()
+
+        def dim_screen(self):
+              overlay = pygame.Surface((WIDTH, HEIGHT), pygame.SRCALPHA)
+              overlay.fill((0, 0, 0, 150)) 
+              self.screen.blit(overlay, (0,0))
+
+
+        def handle_events(self):
+            for event in pygame.event.get():
+                if event.type == pygame.QUIT:
+                    return False
+
+                if event.type == pygame.KEYDOWN:
+                    if event.key == pygame.K_ESCAPE:
+                        return False
+
+                    elif event.key == pygame.K_r:
+                        self.reset()
+
+                    elif event.key == pygame.K_p:
+                        self.reset()
+
+                        if self.state == "playing":
+                            self.state == "paused"
+
+                        elif self.state == "paused":
+                            self.state == "playing"
+
+                    elif self.state == "playing":
+                        if event.key == pygame.K_SPACE:
+                            self.use.volley()
+
+                        elif event.key == pygame.K_n and not self.wave_active:
+                            self.countdown = 0
+
+                elif event.type == pygame.MOUSEBUTTONDOWN and event.button == 1:
+                    if self.state == "playing":
+                        self.handle_click(event.pos)
+
+            return True
+
+        def run(self):
+            running = True
+            while running:
+                dt = self.clock.tick(FPS) / 1000.0
+                dt = min(dt, 0.05)
+                running = self.handel_events()
+                self.update(dt)
+                self.draw()
+
+            pygame.quit()
+            sys.exit()
+
+if __name__ == "__main__":
+    Game().run()
