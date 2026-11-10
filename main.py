@@ -74,8 +74,9 @@ class Base:
         pygame.draw.rect(screen,  GREEN, fill)
 
 #  Enemy 
+class Enemy:
 
-def __init__(self, kind, wave):
+   def __init__(self, kind, wave):
     stats = ENEMY_TYPES[kind]
     scale = 1 + 0.25  * (wave - 1)
     self.kind = kind
@@ -121,10 +122,8 @@ def update (self, dt, base):
         pygame.draw.rect(screen, GREY, bar)
         bar.width = max(0, int(w*self.health / self.max_health))
         pygame.draw.rect(screen, GREEN, bar)
-
-
-        # Arrow 
-        class Arrow:
+ # Arrow 
+class Arrow:
             SPEED = 450
 
             def __init__(self, x, y,target,damage):
@@ -210,7 +209,7 @@ class Archer:
             screen.blit(label, label.get_rect(center=(self.x, self.y)))
 
 
-            
+
 
 
 
