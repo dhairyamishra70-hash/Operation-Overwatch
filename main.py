@@ -406,3 +406,53 @@ class Game:
               overlay = pygame.Surface((WIDTH, HEIGHT), pygame.SRCALPHA)
               overlay.fill((0, 0, 0, 150)) 
               self.screen.blit(overlay, (0,0))
+
+
+        def handle_events(self):
+            for event in pygame.event.get():
+                if event.type == pygame.QUIT:
+                    return False
+
+                if event.type == pygame.KEYDOWN:
+                    if event.key == pygame.K_ESCAPE:
+                        return False
+
+                    elif event.key == pygame.K_r:
+                        self.reset()
+
+                    elif event.key == pygame.K_p:
+                        self.reset()
+
+                        if self.state == "playing":
+                            self.state == "paused"
+
+                        elif self.state == "paused":
+                            self.state == "playing"
+
+                    elif self.state == "playing":
+                        if event.key == pygame.K_SPACE:
+                            self.use.volley()
+
+                        elif event.key == pygame.K_n and not self.wave_active:
+                            self.countdown = 0
+
+                elif event.type == pygame.MOUSEBUTTONDOWN and event.button == 1:
+                    if self.state == "playing":
+                        self.handle_click(event.pos)
+
+            return True
+
+        def run(self):
+            running = True
+            while running:
+                dt = self.clock.tick(FPS) / 1000.0
+                dt = min(dt, 0.05)
+                running = self.handel_events()
+                self.update(dt)
+                self.draw()
+
+            pygame.quit()
+            sys.exit()
+
+if __name__ == "__main__":
+    Game().run()
