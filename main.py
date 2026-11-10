@@ -156,6 +156,62 @@ def update (self, dt, base):
             def draw(self, screen):
                 pygame.draw.circle(screen, WHITE, (int(self.x), int(self.y)),  3)
 
+# Archer
+
+class Archer:
+    def __init__(self,x, y):
+        self.x = x
+        self.y = y
+        self.level = 1
+        self.damage = 12
+        self.range = 100
+        self.cooldown = 0.8
+        self.timer = 0.0
+
+
+    @property
+    def upgrade_cost(self):
+        return 40 * self.level
+
+    def upgrade(self):
+        self.level += 1
+        self.damage = round(self.damage * 1.2, 1)
+        self.range += 12
+        self.cooldown =  max(0.25, self.cooldown * 0.92)
+
+    def update (self, dt, enemies, arrows):
+        self.timer -= dt
+        if self.timer > 0:
+            return
+
+        target = None
+        best = self.range  + 1
+        for enemy in enemies:
+            d = distance(self.x, self.y, enemies.x, enemy.y)
+            if d <= self.range and d < best:
+                best = d
+                target = enemy
+
+            if target is not None:
+                arrows.append(Arrow(self.x, self.y, target, self.damage))
+                self.timer = self.cooldown
+
+
+    def draw(self, screen, font, selected = False):
+        if selected:
+            ring = pygame.Surface((self.range * 2, self.range *2 ), pygame.SRCALPHA)
+            pygame.draw.circle(ring, (255, 255, 255, 40), (self.range, self.range), self.range)
+            pygame.draw.circle(ring, (255, 255, 255, 255, 120),  (self.range, self.range), self.range, 2)
+
+            screen.blit(ring, (self.x - self.range, self.y - self.range))
+            pygame.draw.circle(screen, BLUE, (self.x, self.y), 14)
+            pygame.draw.circle(screen, GOLD if selected else BLACK, (self.x, self.y), 14, 2)
+            label = font.render(str(self.level), True, WHITE)
+            screen.blit(label, label.get_rect(center=(self.x, self.y)))
+
+
+            
+
 
 
 #  Game Systems
