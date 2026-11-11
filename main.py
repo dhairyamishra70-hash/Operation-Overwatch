@@ -656,11 +656,7 @@ while running:
         note = small_font.render("(teammates add their game here - ESC goes back)", True, (150, 160, 170))
         screen.blit(note, note.get_rect(center=(width // 2, height // 2 + 70)))
 
-    pygame.display.flip()
-
-pygame.quit()
-sys.exit()
-
+  
 
 # ARMORY
 
@@ -1152,3 +1148,9 @@ class Game:
 
 if __name__ == "__main__":
     Game().run()
+
+    pygame.display.flip()
+    
+    pygame.quit()
+    sys.exit()
+    
