@@ -6,8 +6,8 @@ import random
 pygame.init()
 
 # window size - we all agreed on 1280 x 720
-width = 1280
-height = 720
+width = 1920
+height = 1080
 screen = pygame.display.set_mode((width, height))
 pygame.display.set_caption("Operation: Overwatch")
 clock = pygame.time.Clock()
