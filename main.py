@@ -463,8 +463,533 @@ class MenuItem:
         surface.blit(self.dark, (self.rect.x + 20, text_y))
 
 
+
 # ------------------------------------------------------------
-# setup
+# GAMEPLAY SYSTEMS
+# ------------------------------------------------------------
+
+HUD_HEIGHT = 58
+FOOTER_HEIGHT = 58
+GROUND_Y = height - FOOTER_HEIGHT - 35
+
+WHITE = (240, 240, 235)
+GREY = (115, 125, 135)
+GREEN = (80, 190, 115)
+RED = (210, 75, 75)
+GOLD = (240, 185, 75)
+BLUE = (90, 160, 220)
+GRASS = (24, 39, 35)
+SOIL = (35, 28, 25)
+
+START_FUNDS = 150
+BASE_MAX_HEALTH = 150
+ARCHER_COST = 50
+MAX_ARCHER_LEVEL = 5
+KILLSTREAK_NEEDED = 10
+VOLLEY_DAMAGE = 80
+INTERMISSION_TIME = 4.0
+
+ENEMY_TYPES = {
+    "grunt": {
+        "health": 35, "speed": 58, "damage": 12, "reward": 5,
+        "radius": 12, "color": (190, 72, 72)
+    },
+    "runner": {
+        "health": 28, "speed": 112, "damage": 9, "reward": 8,
+        "radius": 9, "color": (225, 145, 55)
+    },
+    "brute": {
+        "health": 105, "speed": 34, "damage": 25, "reward": 18,
+        "radius": 17, "color": (125, 75, 145)
+    }
+}
+
+
+def distance(x1, y1, x2, y2):
+    return math.hypot(x2 - x1, y2 - y1)
+
+
+class Base:
+    def __init__(self):
+        self.rect = pygame.Rect(width - 112, GROUND_Y - 125, 82, 125)
+        self.max_health = BASE_MAX_HEALTH
+        self.health = BASE_MAX_HEALTH
+
+    @property
+    def center(self):
+        return self.rect.center
+
+    def take_damage(self, amount):
+        self.health = max(0, self.health - amount)
+
+    def is_destroyed(self):
+        return self.health <= 0
+
+    def draw(self, surface):
+        # Fortress wall and battlements
+        pygame.draw.rect(surface, (105, 104, 99), self.rect)
+        pygame.draw.rect(surface, (55, 57, 59), self.rect, 3)
+        for i in range(4):
+            x = self.rect.x + 5 + i * 19
+            pygame.draw.rect(surface, (125, 123, 115), (x, self.rect.y - 12, 13, 14))
+        pygame.draw.rect(surface, (45, 39, 35),
+                         (self.rect.centerx - 13, self.rect.bottom - 48, 26, 48))
+        pygame.draw.rect(surface, (35, 37, 39), self.rect, 2)
+
+        bar = pygame.Rect(self.rect.x - 4, self.rect.y - 27, self.rect.width + 8, 9)
+        pygame.draw.rect(surface, (45, 45, 48), bar)
+        fill = bar.copy()
+        fill.width = int(bar.width * self.health / self.max_health)
+        pygame.draw.rect(surface, GREEN if self.health > 45 else RED, fill)
+
+
+class Enemy:
+    def __init__(self, kind, wave):
+        stats = ENEMY_TYPES[kind]
+        scale_factor = 1 + 0.20 * (wave - 1)
+        self.kind = kind
+        self.x = -25
+        self.y = GROUND_Y - random.randint(0, 18)
+        self.max_health = stats["health"] * scale_factor
+        self.health = self.max_health
+        self.speed = stats["speed"] * (1 + 0.025 * (wave - 1))
+        self.damage = stats["damage"] + max(0, wave - 1)
+        self.reward = stats["reward"] + wave
+        self.radius = stats["radius"]
+        self.color = stats["color"]
+
+    def update(self, dt, base):
+        target_x = base.rect.left
+        if self.x < target_x:
+            self.x = min(target_x, self.x + self.speed * dt)
+
+    def reached_base(self, base):
+        return self.x >= base.rect.left - self.radius
+
+    def is_dead(self):
+        return self.health <= 0
+
+    def draw(self, surface):
+        x, y = int(self.x), int(self.y)
+        # Simple side-view enemy sprite
+        pygame.draw.ellipse(surface, self.color,
+                            (x - self.radius, y - self.radius,
+                             self.radius * 2, self.radius * 2))
+        pygame.draw.circle(surface, (28, 24, 25),
+                           (x + self.radius // 3, y - 3), 2)
+        pygame.draw.line(surface, (35, 30, 30),
+                         (x - 5, y + self.radius - 1),
+                         (x - 8, y + self.radius + 7), 3)
+        pygame.draw.line(surface, (35, 30, 30),
+                         (x + 5, y + self.radius - 1),
+                         (x + 8, y + self.radius + 7), 3)
+
+        bar_width = self.radius * 2
+        bar = pygame.Rect(x - self.radius, y - self.radius - 8, bar_width, 4)
+        pygame.draw.rect(surface, (55, 55, 58), bar)
+        bar.width = max(0, int(bar_width * self.health / self.max_health))
+        pygame.draw.rect(surface, GREEN, bar)
+
+
+class Arrow:
+    SPEED = 460
+
+    def __init__(self, x, y, target, damage):
+        self.x = float(x)
+        self.y = float(y)
+        self.target = target
+        self.damage = damage
+        self.alive = True
+
+    def update(self, dt):
+        if self.target.is_dead():
+            self.alive = False
+            return
+
+        dx = self.target.x - self.x
+        dy = self.target.y - self.y
+        dist = math.hypot(dx, dy)
+
+        if dist <= self.SPEED * dt + self.target.radius:
+            self.target.health -= self.damage
+            self.alive = False
+        elif dist > 0:
+            step = self.SPEED * dt
+            self.x += dx / dist * step
+            self.y += dy / dist * step
+
+    def draw(self, surface):
+        x, y = int(self.x), int(self.y)
+        pygame.draw.line(surface, (225, 215, 185),
+                         (x - 7, y + 3), (x + 7, y - 3), 3)
+        pygame.draw.polygon(surface, WHITE,
+                            [(x + 7, y - 3), (x + 1, y - 4), (x + 4, y + 2)])
+
+
+class Archer:
+    def __init__(self, x, y):
+        self.x = int(x)
+        self.y = int(y)
+        self.level = 1
+        self.damage = 12
+        self.range = 175
+        self.cooldown = 0.85
+        self.timer = 0.2
+
+    @property
+    def upgrade_cost(self):
+        return 40 * self.level
+
+    def upgrade(self):
+        if self.level >= MAX_ARCHER_LEVEL:
+            return
+        self.level += 1
+        self.damage = round(self.damage * 1.25)
+        self.range += 22
+        self.cooldown = max(0.30, self.cooldown * 0.90)
+
+    def update(self, dt, enemies, arrows):
+        self.timer -= dt
+        if self.timer > 0:
+            return
+
+        target = None
+        nearest_distance = self.range
+
+        for enemy in enemies:
+            current_distance = distance(self.x, self.y, enemy.x, enemy.y)
+            if current_distance <= nearest_distance:
+                nearest_distance = current_distance
+                target = enemy
+
+        if target is not None:
+            arrows.append(Arrow(self.x + 10, self.y - 12, target, self.damage))
+            self.timer = self.cooldown
+
+    def draw(self, surface, font, selected=False):
+        if selected:
+            ring = pygame.Surface((self.range * 2, self.range * 2), pygame.SRCALPHA)
+            pygame.draw.circle(ring, (220, 225, 235, 28),
+                               (self.range, self.range), self.range)
+            pygame.draw.circle(ring, (220, 225, 235, 100),
+                               (self.range, self.range), self.range, 2)
+            surface.blit(ring, (self.x - self.range, self.y - self.range))
+
+        # Small archer silhouette
+        pygame.draw.circle(surface, (205, 180, 145), (self.x, self.y - 22), 8)
+        pygame.draw.line(surface, (105, 145, 175),
+                         (self.x, self.y - 13), (self.x, self.y + 13), 7)
+        pygame.draw.line(surface, (105, 145, 175),
+                         (self.x, self.y - 5), (self.x + 13, self.y + 1), 4)
+        pygame.draw.line(surface, (90, 65, 48),
+                         (self.x + 13, self.y - 18), (self.x + 13, self.y + 8), 2)
+        pygame.draw.line(surface, (210, 195, 165),
+                         (self.x + 13, self.y - 18), (self.x + 13, self.y + 8), 1)
+        pygame.draw.line(surface, (45, 42, 40),
+                         (self.x - 5, self.y + 12), (self.x - 9, self.y + 24), 4)
+        pygame.draw.line(surface, (45, 42, 40),
+                         (self.x + 5, self.y + 12), (self.x + 9, self.y + 24), 4)
+
+        pygame.draw.circle(surface, GOLD if selected else (25, 30, 35),
+                           (self.x, self.y - 22), 9, 2)
+        level_label = font.render(str(self.level), True, WHITE)
+        surface.blit(level_label, level_label.get_rect(center=(self.x, self.y - 22)))
+
+
+class Game:
+    def __init__(self):
+        self.font = pygame.font.SysFont("consolas", 19, bold=True)
+        self.small_font = pygame.font.SysFont("consolas", 14)
+        self.big_font = pygame.font.SysFont("georgia", 54, bold=True)
+        self.reset()
+
+    def reset(self):
+        self.state = "playing"
+        self.base = Base()
+        self.enemies = []
+        self.archers = []
+        self.arrows = []
+        self.funds = START_FUNDS
+        self.wave = 0
+        self.kills = 0
+        self.killstreak = 0
+        self.wave_active = False
+        self.countdown = 1.5
+        self.spawn_queue = []
+        self.spawn_timer = 0.0
+        self.selected = None
+        self.message = "Deploy archers to defend the fortress"
+        self.message_timer = 3.0
+        self.flash = 0.0
+
+    def say(self, message):
+        self.message = message
+        self.message_timer = 2.2
+
+    def start_wave(self):
+        if self.wave_active or self.state != "playing":
+            return
+        self.wave += 1
+        self.wave_active = True
+        count = 4 + 2 * self.wave
+        kinds = ["grunt"]
+        weights = [15]
+
+        if self.wave >= 2:
+            kinds.append("runner")
+            weights.append(4)
+        if self.wave >= 3:
+            kinds.append("brute")
+            weights.append(2 + self.wave // 3)
+
+        self.spawn_queue = random.choices(kinds, weights=weights, k=count)
+        self.spawn_timer = 0.0
+        self.say(f"WAVE {self.wave} INCOMING")
+
+    def update_waves(self, dt):
+        if not self.wave_active:
+            self.countdown -= dt
+            if self.countdown <= 0:
+                self.start_wave()
+            return
+
+        if self.spawn_queue:
+            self.spawn_timer -= dt
+            if self.spawn_timer <= 0:
+                kind = self.spawn_queue.pop(0)
+                self.enemies.append(Enemy(kind, self.wave))
+                self.spawn_timer = max(0.38, 1.25 - 0.045 * self.wave)
+
+        elif not self.enemies:
+            self.wave_active = False
+            bonus = 20 + 5 * self.wave
+            self.funds += bonus
+            self.countdown = INTERMISSION_TIME
+            self.say(f"WAVE {self.wave} CLEARED  +{bonus} FUNDS")
+
+    def collect_dead_enemies(self):
+        survivors = []
+        for enemy in self.enemies:
+            if enemy.is_dead():
+                self.funds += enemy.reward
+                self.kills += 1
+                self.killstreak += 1
+            else:
+                survivors.append(enemy)
+        self.enemies = survivors
+
+    def use_volley(self):
+        if self.killstreak < KILLSTREAK_NEEDED:
+            self.say(f"VOLLEY NOT READY  {self.killstreak}/{KILLSTREAK_NEEDED}")
+            return
+
+        for enemy in self.enemies:
+            enemy.health -= VOLLEY_DAMAGE
+
+        self.collect_dead_enemies()
+        self.killstreak = 0
+        self.flash = 0.22
+        self.say("DIVINE VOLLEY RELEASED")
+
+    def handle_click(self, pos):
+        x, y = pos
+        if y < HUD_HEIGHT or y > height - FOOTER_HEIGHT:
+            return
+
+        for archer in self.archers:
+            if distance(x, y, archer.x, archer.y - 5) <= 22:
+                self.selected = archer
+                return
+
+        if x >= self.base.rect.left - 25:
+            self.say("TOO CLOSE TO THE FORTRESS")
+        elif any(distance(x, y, a.x, a.y) < 38 for a in self.archers):
+            self.say("ARCHERS NEED MORE SPACE")
+        elif self.funds < ARCHER_COST:
+            self.say("NOT ENOUGH FUNDS")
+        else:
+            self.funds -= ARCHER_COST
+            self.selected = Archer(x, min(y, GROUND_Y - 8))
+            self.archers.append(self.selected)
+            self.say("ARCHER DEPLOYED")
+
+    def upgrade_selected(self):
+        archer = self.selected
+        if archer is None:
+            self.say("SELECT AN ARCHER FIRST")
+        elif archer.level >= MAX_ARCHER_LEVEL:
+            self.say("ARCHER ALREADY AT MAX LEVEL")
+        elif self.funds < archer.upgrade_cost:
+            self.say(f"NEED {archer.upgrade_cost} FUNDS")
+        else:
+            self.funds -= archer.upgrade_cost
+            archer.upgrade()
+            self.say(f"ARCHER UPGRADED TO LEVEL {archer.level}")
+
+    def handle_event(self, event):
+        if event.type == pygame.MOUSEBUTTONDOWN and event.button == 1:
+            self.handle_click(event.pos)
+
+        elif event.type == pygame.KEYDOWN:
+            if event.key == pygame.K_p and self.state in ("playing", "paused"):
+                self.state = "paused" if self.state == "playing" else "playing"
+            elif event.key == pygame.K_r:
+                self.reset()
+            elif event.key == pygame.K_u and self.state == "playing":
+                self.upgrade_selected()
+            elif event.key == pygame.K_SPACE and self.state == "playing":
+                self.use_volley()
+            elif event.key == pygame.K_n and self.state == "playing" and not self.wave_active:
+                self.countdown = 0
+                self.start_wave()
+
+    def update(self, dt):
+        if self.message_timer > 0:
+            self.message_timer = max(0, self.message_timer - dt)
+        if self.flash > 0:
+            self.flash = max(0, self.flash - dt)
+
+        if self.state != "playing":
+            return
+
+        self.update_waves(dt)
+
+        survivors = []
+        for enemy in self.enemies:
+            enemy.update(dt, self.base)
+            if enemy.reached_base(self.base):
+                self.base.take_damage(enemy.damage)
+                self.killstreak = 0
+                self.say(f"FORTRESS HIT  -{enemy.damage} HP")
+            else:
+                survivors.append(enemy)
+        self.enemies = survivors
+
+        for archer in self.archers:
+            archer.update(dt, self.enemies, self.arrows)
+
+        for arrow in self.arrows:
+            arrow.update(dt)
+        self.arrows = [arrow for arrow in self.arrows if arrow.alive]
+
+        self.collect_dead_enemies()
+
+        if self.base.is_destroyed():
+            self.state = "game over"
+            self.say("THE FORTRESS HAS FALLEN")
+
+    def draw_background(self, surface):
+        surface.fill((12, 18, 29))
+
+        # Distant mountains and ruined battlefield silhouettes
+        pygame.draw.polygon(surface, (24, 31, 43),
+                            [(0, 365), (130, 225), (260, 355), (420, 205),
+                             (590, 355), (760, 245), (960, 360), (1120, 220),
+                             (1280, 350), (1280, GROUND_Y), (0, GROUND_Y)])
+        pygame.draw.circle(surface, (190, 166, 125), (1030, 145), 42)
+        pygame.draw.circle(surface, (12, 18, 29), (1048, 132), 40)
+
+        # Ground layers
+        pygame.draw.rect(surface, (35, 43, 39),
+                         (0, GROUND_Y, width, height - GROUND_Y))
+        pygame.draw.line(surface, (105, 91, 66),
+                         (0, GROUND_Y), (width, GROUND_Y), 3)
+        for i in range(18):
+            x = (i * 83 + 25) % width
+            pygame.draw.line(surface, (48, 57, 48),
+                             (x, GROUND_Y + 15), (x + 18, GROUND_Y + 28), 2)
+
+        # HUD and footer
+        pygame.draw.rect(surface, (8, 11, 17), (0, 0, width, HUD_HEIGHT))
+        pygame.draw.line(surface, (105, 115, 125),
+                         (0, HUD_HEIGHT), (width, HUD_HEIGHT), 1)
+        pygame.draw.rect(surface, (8, 11, 17),
+                         (0, height - FOOTER_HEIGHT, width, FOOTER_HEIGHT))
+        pygame.draw.line(surface, (105, 115, 125),
+                         (0, height - FOOTER_HEIGHT),
+                         (width, height - FOOTER_HEIGHT), 1)
+
+    def draw_text_center(self, surface, text, font, color, y):
+        rendered = font.render(text, True, color)
+        surface.blit(rendered, rendered.get_rect(center=(width // 2, y)))
+
+    def draw_hud(self, surface):
+        hud = (f"WAVE {self.wave}     FUNDS {self.funds}     "
+               f"FORTRESS {self.base.health}/{self.base.max_health}     "
+               f"KILLS {self.kills}     STREAK {self.killstreak}/{KILLSTREAK_NEEDED}")
+        surface.blit(self.font.render(hud, True, cream), (18, 18))
+
+        if self.killstreak >= KILLSTREAK_NEEDED:
+            ready = self.font.render("SPACE: VOLLEY READY", True, GOLD)
+            surface.blit(ready, (width - ready.get_width() - 18, 39))
+
+        if self.selected:
+            a = self.selected
+            info = (f"ARCHER LV.{a.level}  DAMAGE {a.damage}  RANGE {a.range}  "
+                    f"| U: UPGRADE ({a.upgrade_cost if a.level < MAX_ARCHER_LEVEL else 'MAX'})")
+        else:
+            info = "CLICK GROUND: DEPLOY ARCHER (50)   |   P: PAUSE   N: NEXT WAVE   R: RESTART"
+        surface.blit(self.small_font.render(info, True, silver),
+                     (18, height - FOOTER_HEIGHT + 20))
+
+        if not self.wave_active and self.state == "playing":
+            countdown_text = f"NEXT WAVE {max(0, math.ceil(self.countdown))}s  |  PRESS N TO START"
+            self.draw_text_center(surface, countdown_text, self.font, GOLD, HUD_HEIGHT + 25)
+
+        if self.message_timer > 0:
+            self.draw_text_center(surface, self.message, self.font, WHITE, HUD_HEIGHT + 55)
+
+    def draw(self, surface):
+        self.draw_background(surface)
+
+        # A few battlefield structures behind the units
+        for x in (170, 350, 560, 760):
+            pygame.draw.rect(surface, (49, 47, 43), (x, GROUND_Y - 55, 10, 55))
+            pygame.draw.polygon(surface, (49, 47, 43),
+                                [(x - 12, GROUND_Y - 55),
+                                 (x + 5, GROUND_Y - 78),
+                                 (x + 22, GROUND_Y - 55)])
+
+        self.base.draw(surface)
+
+        for archer in self.archers:
+            archer.draw(surface, self.small_font, archer is self.selected)
+        for enemy in self.enemies:
+            enemy.draw(surface)
+        for arrow in self.arrows:
+            arrow.draw(surface)
+
+        self.draw_hud(surface)
+
+        if self.flash > 0:
+            overlay = pygame.Surface((width, height), pygame.SRCALPHA)
+            overlay.fill((255, 235, 175, int(100 * self.flash / 0.22)))
+            surface.blit(overlay, (0, 0))
+
+        if self.state == "paused":
+            self.dim_screen(surface)
+            self.draw_text_center(surface, "PAUSED", self.big_font, WHITE, height // 2 - 15)
+            self.draw_text_center(surface, "PRESS P TO RESUME", self.font,
+                                  GOLD, height // 2 + 40)
+
+        elif self.state == "game over":
+            self.dim_screen(surface)
+            self.draw_text_center(surface, "SECTOR LOST", self.big_font, RED,
+                                  height // 2 - 35)
+            self.draw_text_center(surface,
+                                  f"WAVE {self.wave}  |  KILLS {self.kills}",
+                                  self.font, WHITE, height // 2 + 20)
+            self.draw_text_center(surface, "PRESS R TO RESTART  |  ESC FOR MENU",
+                                  self.font, GOLD, height // 2 + 65)
+
+    def dim_screen(self, surface):
+        overlay = pygame.Surface((width, height), pygame.SRCALPHA)
+        overlay.fill((0, 0, 0, 165))
+        surface.blit(overlay, (0, 0))
+
+
+# ------------------------------------------------------------
+# SETUP AND MAIN APPLICATION LOOP
 # ------------------------------------------------------------
 
 eye = Eye()
@@ -477,7 +1002,6 @@ logo_small = pygame.font.SysFont("impact,arialblack,arial", 44)
 logo_big = pygame.font.SysFont("impact,arialblack,arial", 88)
 big_font = pygame.font.SysFont("georgia", 66, bold=True)
 
-# the logo, drawn once (a dark copy a bit lower-right gives it a shadow)
 logo_1 = spaced_text("OPERATION:", logo_small, cream, 5)
 logo_1_shadow = spaced_text("OPERATION:", logo_small, (0, 0, 0), 5)
 logo_2 = spaced_text("OVERWATCH", logo_big, cream, 4)
@@ -493,103 +1017,105 @@ items = [
 ]
 selected = 0
 
-# the eye is drawn on its own surface so we can zoom into it
 eye_surface = pygame.Surface((width, height))
-cover = pygame.Surface((width, height))      # black sheet for fading
+cover = pygame.Surface((width, height))
 cover.fill((0, 0, 0))
 
-state = "intro"      # intro -> look -> zoom -> menu -> game
-
-# the pupil looks around, then goes back to the middle
+state = "intro"
 look_keys = [(-14, -2), (14, 2), (-12, 0), (12, -1), (0, 0)]
-look_step = 0.55     # seconds for each look
+look_step = 0.55
 look_time = 0.0
-
-zoom_amount = 0.0    # goes from 0 to 1 during the zoom
-zoom_time = 3.0      # seconds the zoom takes
-max_zoom = 25        # how close we get at the end
-fade = 0             # 255 = all black, 0 = normal
+zoom_amount = 0.0
+zoom_time = 3.0
+max_zoom = 25
+fade = 0
+game = Game()
 
 running = True
 while running:
-    dt = clock.tick(60) / 1000   # seconds since last frame
-    choice = None                # which menu item got picked this frame
+    dt = min(clock.tick(60) / 1000.0, 0.05)
+    choice = None
 
-    # ----- events -----
     for event in pygame.event.get():
         if event.type == pygame.QUIT:
             running = False
+            continue
+
+        if state == "game":
+            if event.type == pygame.KEYDOWN and event.key == pygame.K_ESCAPE:
+                state = "menu"
+                continue
+            game.handle_event(event)
+            continue
 
         if event.type == pygame.KEYDOWN and event.key == pygame.K_ESCAPE:
-            if state == "game":
+            if state in ("how_to_play", "settings"):
                 state = "menu"
             else:
                 running = False
+            continue
 
         if state == "intro":
-            # any click or key starts the looking around
             if event.type == pygame.MOUSEBUTTONDOWN:
                 state = "look"
                 look_time = 0.0
-            if event.type == pygame.KEYDOWN and event.key != pygame.K_ESCAPE:
+            elif event.type == pygame.KEYDOWN and event.key != pygame.K_ESCAPE:
                 state = "look"
                 look_time = 0.0
 
         elif state == "menu":
-            # mouse
             if event.type == pygame.MOUSEMOTION:
-                for i in range(len(items)):
-                    if items[i].rect.collidepoint(event.pos):
+                for i, item in enumerate(items):
+                    if item.rect.collidepoint(event.pos):
                         selected = i
-            if event.type == pygame.MOUSEBUTTONDOWN and event.button == 1:
+            elif event.type == pygame.MOUSEBUTTONDOWN and event.button == 1:
                 for item in items:
                     if item.rect.collidepoint(event.pos):
                         choice = item.text
-            # keyboard
-            if event.type == pygame.KEYDOWN:
-                if event.key == pygame.K_UP or event.key == pygame.K_w:
+            elif event.type == pygame.KEYDOWN:
+                if event.key in (pygame.K_UP, pygame.K_w):
                     selected = (selected - 1) % len(items)
-                if event.key == pygame.K_DOWN or event.key == pygame.K_s:
+                elif event.key in (pygame.K_DOWN, pygame.K_s):
                     selected = (selected + 1) % len(items)
-                if event.key == pygame.K_RETURN or event.key == pygame.K_SPACE:
+                elif event.key in (pygame.K_RETURN, pygame.K_SPACE):
                     choice = items[selected].text
 
+        elif state in ("how_to_play", "settings"):
+            if event.type == pygame.KEYDOWN or event.type == pygame.MOUSEBUTTONDOWN:
+                state = "menu"
+
     if choice == "PLAY":
+        game.reset()
         state = "game"
+    elif choice == "HOW TO PLAY":
+        state = "how_to_play"
+    elif choice == "SETTINGS":
+        state = "settings"
     elif choice == "EXIT":
         running = False
-    # TODO: HOW TO PLAY and SETTINGS pages
 
-    t = pygame.time.get_ticks() / 1000
+    t = pygame.time.get_ticks() / 1000.0
 
-    # ----- drawing -----
     if state == "intro":
-        # the pupil wanders left and right by itself
-        eye.update(11 * math.sin(t * 0.6) + 4 * math.sin(t * 1.7), 3 * math.sin(t * 0.9))
+        eye.update(11 * math.sin(t * 0.6) + 4 * math.sin(t * 1.7),
+                   3 * math.sin(t * 0.9))
         eye_surface.fill(bg_color)
         eye.draw(eye_surface)
         screen.blit(eye_surface, (0, 0))
 
-        # blinking text at the bottom
         prompt = small_font.render("CLICK ANYWHERE TO ENTER", True, silver)
         prompt.set_alpha(int(140 + 115 * math.sin(t * 3)))
         screen.blit(prompt, prompt.get_rect(center=(width // 2, height - 50)))
 
     elif state == "look":
-        # quick looks left and right, then back to the middle
         look_time += dt
         index = int(look_time / look_step)
-        if index < len(look_keys):
-            goal = look_keys[index]
-        else:
-            goal = (0, 0)
+        goal = look_keys[index] if index < len(look_keys) else (0, 0)
         eye.update(goal[0], goal[1], 0.2)
-
         eye_surface.fill(bg_color)
         eye.draw(eye_surface)
         screen.blit(eye_surface, (0, 0))
 
-        # when it is back in the middle (plus a short pause) the zoom starts
         if look_time > look_step * len(look_keys) + 0.5:
             state = "zoom"
 
@@ -598,24 +1124,17 @@ while running:
         eye_surface.fill(bg_color)
         eye.draw(eye_surface)
 
-        zoom_amount += dt / zoom_time
-        if zoom_amount > 1:
-            zoom_amount = 1
-        zoom = max_zoom ** zoom_amount    # gets faster and faster
-
-        # cut out a small piece around the pupil and stretch it to full screen
-        piece_w = int(width / zoom)
-        piece_h = int(height / zoom)
+        zoom_amount = min(1, zoom_amount + dt / zoom_time)
+        zoom = max_zoom ** zoom_amount
+        piece_w = max(1, int(width / zoom))
+        piece_h = max(1, int(height / zoom))
         pupil_x = int(eye.iris_x * eye.cell)
         pupil_y = int(eye.iris_y * eye.cell)
-        left = pupil_x - piece_w // 2
-        top = pupil_y - piece_h // 2
-        left = max(0, min(width - piece_w, left))     # stay inside the screen
-        top = max(0, min(height - piece_h, top))
+        left = max(0, min(width - piece_w, pupil_x - piece_w // 2))
+        top = max(0, min(height - piece_h, pupil_y - piece_h // 2))
         piece = eye_surface.subsurface((left, top, piece_w, piece_h))
         screen.blit(pygame.transform.scale(piece, (width, height)), (0, 0))
 
-        # fade to black at the end
         if zoom_amount > 0.6:
             cover.set_alpha(int(255 * (zoom_amount - 0.6) / 0.4))
             screen.blit(cover, (0, 0))
@@ -627,530 +1146,58 @@ while running:
     elif state == "menu":
         draw_menu_background(t, dt)
         screen.blit(panel, (0, 0))
-
-        # logo + tagline
         screen.blit(logo_1_shadow, (83, 123))
         screen.blit(logo_1, (80, 120))
         screen.blit(logo_2_shadow, (83, 173))
         screen.blit(logo_2, (80, 170))
         screen.blit(tagline, (84, 285))
 
-        # menu
-        for i in range(len(items)):
-            items[i].draw(screen, i == selected, dt)
+        for i, item in enumerate(items):
+            item.draw(screen, i == selected, dt)
 
         screen.blit(esc_hint, (width - esc_hint.get_width() - 30, height - 40))
 
-        # fade in from black (takes 1 second)
         if fade > 0:
-            fade -= 255 * dt
-            if fade < 0:
-                fade = 0
+            fade = max(0, fade - 255 * dt)
             cover.set_alpha(int(fade))
             screen.blit(cover, (0, 0))
 
     elif state == "game":
-        screen.fill((6, 12, 20))
-        text = big_font.render("GAME STARTS HERE", True, cream)
-        screen.blit(text, text.get_rect(center=(width // 2, height // 2)))
-        note = small_font.render("(teammates add their game here - ESC goes back)", True, (150, 160, 170))
-        screen.blit(note, note.get_rect(center=(width // 2, height // 2 + 70)))
-
-  
-
-# ARMORY
-
-START_FUNDS = 150
-BASE_MAX_HEALTH = 150
-ARCHER_COST = 50
-MAX_ARCHER_LEVEL = 5
-KILLSTREAK_NEEDED = 10
-VOLLEY_DAMAGE = 80
-INTERMISSION_TIME = 4.0
-
-# 2. Enemy types 
-
-# Wave 1
-
-ENEMY_TYPES = {
-    "grunt":  {"health": 35,  "speed": 60,  "damage": 20, "reward": 5, "radius": 10, "color": (200, 70, 70)},
-    "runner": {"health": 70,  "speed": 150, "damage": 25,  "reward": 10, "radius": 8,  "color": (230, 150, 40)},
-}
-#  3. Helper Function
-
-def distance(x1, y1, x2, y2):
-    return math.hypot(x2-x1,y2-y1)
-
-# 4. BASE
-
-class Base:
-    def __init__(self):
-        self.rect = pygame.rect(WIDTH - 90, 0 , 60 , 130)
-        self.rect.centery = (HUD_HEIGHT + HEIGHT - FOOTER_HEIGHT)// 2
-        self.max_health =  BASE_MAX_HEALTH
-        self.health = BASE_MAX_HEALTH
-
-    @property
-    def center(self):
-        return self.rect.center
-
-    def take_damage(self, amount):
-        self.health = max(0, self.health - amount)
-
-    def is_destroyed(self):
-        return self.health <= 0
-
-    def draw(self, screen):
-        pygame.rect(screen, (150,130,100), self.rect)
-        pygame.draw.rect(screen, BLACK, self.rect, 3)
-
-        bar = pygame.Rect(self.rect.x, self.rect.y - 14, self.rect.width, 8)
-        pygame.draw.rect(screen, GREY. bar)
-        fill = bar.copy()
-        fill.width =  int(bar.width * self.health / self.max_health)
-        pygame.draw.rect(screen,  GREEN, fill)
-
-#  Enemy 
-class Enemy:
-
-   def __init__(self, kind, wave):
-    stats = ENEMY_TYPES[kind]
-    scale = 1 + 0.25  * (wave - 1)
-    self.kind = kind
-    self.x = -20
-    self.y = random.randint(HUD_HEIGHT + 30, HEIGHT - FOOTER_HEIGHT - 30 )
-    self.max_health = stats["health"] * scale
-    self.health = self.max_health
-    self.speed = stats["Speed"]
-    self.damage = stats["Damage"]
-    self.reward = stats["Reward"]
-    self.radius = stats["Radius"]
-    self.color = stats["color"]
-
-def update (self, dt, base):
-
-    """Moving to the base"""
-    dx = base.center[0]- self.x
-    dy = base.center[1]- self.y
-    dist = math.hypot(dx, dy)
-    if dist > 0:
-        step = self.speed * dt
-        self.x += dx / dist * step
-        self.y += dy / dist * step
-
-
-    def reached_base(self, base):
-
-        # Collision at base
-
-        return base.rect.inflate(self.radius * 2,  self.radius * 2).collidepoint(self.x, self.y)
-
-    def is_dead(self):
-        return self.health <= 0
-
-    def draw(self, screen):
-        pygame.draw.circle(screen, self.color, ((int(self.x), self.y)), self.radius)
-        pygame.draw.circle(screen, BLACK, (int(self.x), int(self.y),), self.radius, 2)
-
-        #  health bar
-
-        w = self.radius * 2
-        bar = pygame.Rect(int(self.x) - self.radius, int(self.y) - self.radius - 7, w, 4)
-        pygame.draw.rect(screen, GREY, bar)
-        bar.width = max(0, int(w*self.health / self.max_health))
-        pygame.draw.rect(screen, GREEN, bar)
- # Arrow 
-class Arrow:
-            SPEED = 450
-
-            def __init__(self, x, y,target,damage):
-                self.x = x
-                self.y = y
-                self.target = target
-                self.damage = damage
-                self.alive = True
-
-            def update(self, dt):
-
-                if self.target_is_dead():
-                    self.alive = False
-                    return
-
-                dx = self.target.x - self.x
-                dy = self.target.y - self.y
-                dist = math.hypot(dx, dy)
-                step = self.SPEED * dt
-
-                if dist <= step + self.target.radius:
-                    self.target.health -= self.damage
-                    self.alive = False
-
-                else:
-                    self.x += dx/dist*step
-                    self.y += dy / dist*step
-
-            def draw(self, screen):
-                pygame.draw.circle(screen, WHITE, (int(self.x), int(self.y)),  3)
-
-# Archer
-
-class Archer:
-    def __init__(self,x, y):
-        self.x = x
-        self.y = y
-        self.level = 1
-        self.damage = 12
-        self.range = 100
-        self.cooldown = 0.8
-        self.timer = 0.0
-
-
-    @property
-    def upgrade_cost(self):
-        return 40 * self.level
-
-    def upgrade(self):
-        self.level += 1
-        self.damage = round(self.damage * 1.2, 1)
-        self.range += 12
-        self.cooldown =  max(0.25, self.cooldown * 0.92)
-
-    def update (self, dt, enemies, arrows):
-        self.timer -= dt
-        if self.timer > 0:
-            return
-
-        target = None
-        best = self.range  + 1
-        for enemy in enemies:
-            d = distance(self.x, self.y, enemies.x, enemy.y)
-            if d <= self.range and d < best:
-                best = d
-                target = enemy
-
-            if target is not None:
-                arrows.append(Arrow(self.x, self.y, target, self.damage))
-                self.timer = self.cooldown
-
-
-    def draw(self, screen, font, selected = False):
-        if selected:
-            ring = pygame.Surface((self.range * 2, self.range *2 ), pygame.SRCALPHA)
-            pygame.draw.circle(ring, (255, 255, 255, 40), (self.range, self.range), self.range)
-            pygame.draw.circle(ring, (255, 255, 255, 255, 120),  (self.range, self.range), self.range, 2)
-
-            screen.blit(ring, (self.x - self.range, self.y - self.range))
-            pygame.draw.circle(screen, BLUE, (self.x, self.y), 14)
-            pygame.draw.circle(screen, GOLD if selected else BLACK, (self.x, self.y), 14, 2)
-            label = font.render(str(self.level), True, WHITE)
-            screen.blit(label, label.get_rect(center=(self.x, self.y)))
-
-
-
-
-
-
-#  Game Systems
-class Game:
-    def __init__(self):
-        pygame.init()
-        self.screen = pygame.display.set_mode((WIDTH,HEIGHT))
-        pygame.display.set_caption("Operation Overwatch")
-        self.clock = pygame.time.clock()
-        self.font = pygame.font.SysFont("consolas", 20)
-        self.small_font = pygame.font.SysFont("consolas", 16)
-        self.big_font = pygame.font.SysFont("consolas", 56, bold= True)
-
-    def reset(self):
-        self.state = "playing"
-        self.base = Base()
-        self.enemies = []
-        self.archers = []
-        self.arrows = []
-        self.funds = START_FUNDS
-        self.wave = 0
-        self.kills = 0
-        self.killstreak = 0
-        self.wave_active = False
-        self.countdown = INTERMISSION_TIME
-        self.spawn_queue = []
-        self.spawn_timer = 0.0
-        self.selected = None
-        self.message = ""
-        self.message_timer = 0.0
-        self.flash =  0.0
-
-    def say(self, text):
-        self.message =  text
-        self.message_timer = 2.0
-
-
-    def start_wave(self):
-        self.wave += 1
-        self.wave_active = True
-        count = 4 + 2 * self.wave
-        kinds = ["grunt"]
-        weights = [15]
-        if self.wave >= 2:
-            kinds.append("runner")
-            weights.append(3)
-        if self.wave >= 3:
-            kinds.append("brute")
-            weights.append(1 + self.wave // 3)
-
-        self.spawn.queue = random.choices(kinds,weights, k=count)
-        self.spawn_timer = 0.0
-
-    def update_waves(self, dt):
-        if not self.wave_active:
-            self.countdown -= dt
-            if self.spawn.timer <= 0:
-                self.enemies.append(Enemy(self.spawn_queue.pop(), self.wave))
-                self.spawn_timer = max(0.4, 1.3 - 0.06 *self.wave)
-
-        elif not self.enemies:
-            bonus = 20 + 5 * self.wave
-            self.funds +=  bonus
-            self.say(f"Wave {self.wave} cleared ! + {bonus} funds")
-            self.countdown = INTERMISSION_TIME
-
-    def collect_dead_enemies(self):
-        alive = []
-        for enemy in self.enemies:
-            if enemy.is_dead():
-                self.funds += enemy.reward
-                self.kills += 1
-                self.killstreak += 1
-
-            else:
-                alive.append(enemy)
-                self.enemies = alive
-
-    def use_volley(self):
-        if self.state != "playing":
-            return
-        if self.killstreak <KILLSTREAK_NEEDED:
-            self.say(f"Killstreak {self.killstreak}/{KILLSTREAK_NEEDED} - not ready")
-            return
-        for enemy in self.enemies:
-            enemy.health -= VOLLEY_DAMAGE
-
-        self.collect_dead_enemies()
-        self.killstreak = 0
-        self.flash = 0.25
-        self.say("Divine Volley !")
-
-
-    def handle_click(self, pos):
-        x,y = pos
-        if y < HUD_HEIGHT or y > HEIGHT - FOOTER_HEIGHT:
-            return
-
-        for archer in self.archers:
-            if distance(x,y, archer.x, archer.y) <= 16:
-                self.selected = archer
-                return
-
-        if x > self.base.rect.left - 20:
-            self.say("Too close to the base !")
-        elif any(distance(x,y, a.x,a.y)  <32 for a in self.archers):
-            self.say("Too close to another archer !")
-        elif self.funds < ARCHER_COST:
-            self.say("Not enough funds !")
-
-        else:
-            self.archer -= ARCHER_COST
-            new_archer = archer(x, y)
-            self.archers.append(new_archer)
-            self.selected = new_archer
-
-
-    def upgrade_selected(self):
-        archer =  self.selected
-        if archer is None:
-            self.say("Select an archer !")
-
-        elif archer.level >= MAX_ARCHER_LEVEL:
-            self.say("Archer is ready max level !")
-
-        elif self.funds < archer.upgrade_cost:
-            self.say(f"Need {archer.ipgrade_cost} funds to upgrade")
-
-        else:
-            self.funds -= archer.upgrade.cost
-            archer.upgrade()
-
-
-    def update(self, dt):
-        if self.message_timer > 0:
-            self.message_timer -= dt
-
-        if self.flash > 0:
-            self.flash -= dt
-
-        if self.state != "playing":
-            return
-
-
-        self.update_waves(dt)
-
-
-        stil_walking = []
-        for enemy in self.enemies:
-            enemy.update(dt, self.base)
-
-            if enemy.reached_base(self.base):
-                self.base.take_damage(enemy.damage)
-                self.kilstreak = 0
-
-            else:
-                still_walking.append(enemy) 
-
-        self.enemies = stil_walking
-
-
-        for archer in self.archers:
-            archer.update(dt, self.enemies, self.arrows)
-
-        for arrow in self.arrows:
-            arrow.update(dt)
-        self.arrows = [a for a in self.arrows if a.alive]
-
-        self.collect_dead_enemies()
-
-        if self.base.is_destroyed():
-            self.state = "game over"
-
-
-
-    def draw_text_center(self, text, font, color, y):
-        surf = font.render(text, True, color)
-        self.screen.blit(surf, surf.get_rect(center = (WIDTH // 2)))
-
-
-    def draw_hud(self):
-        pygame.draw.rect(self.screen,  (25, 25, 30), (0, 0, WIDTH, HUD_HEIGHT))
-        text = (f"Wave: {self.wave} | Funds: {self.funds} | "
-                f"Base HP: {self.base.health} | "
-                f"Killstreak: {self.killstreak}/{KILLSTREAK_NEEDED}")
-
-        self.screen.blit(self.font.render(text, True, WHITE), (12, 10))
-        if self.killstreak >= KILLSTREAK_NEEDED:
-            ready = self.font.render("Space: Volley Ready !", True, GOLD)
-            self.screen.blit(ready, (WIDTH - ready.get_width() - 12, 10))
-
-
-        pygame.draw.rect(self.screen, (25, 25, 30), (0,HEIGHT - FOOTER_HEIGHT, WIDTH, FOOTER_HEIGHT))
-
-        if self.selected:
-            a = self.selected
-            info = (f"Archer Level{a.level} damage{a.damage} range{a.range} "
-                    f"| U: upgrade ({a.upgrade_cost if a.level  <MAX_ARCHER_LEVEL else 'MAX'})")
-
-        else: 
-            info = f"Click ground: place Archer ({ARCHER_COST}) | P: Pause | N: Next Wave | R: Restart"
-            self.screen.blit(self.small_font.render(info, True, WHITE), (12, HEIGHT - FOOTER_HEIGHT + 6))
-
-        if not self.wave_active and self.active and self.state == "playing":
-            self.draw._text_center(f"{self.wave + 1} in {max(0, math.ceil(self.countdown))} (N to start now)"
-                                   , self.font, GOLD, HUD_HEIGHT + 20)
-
-        if self.message_timer > 0:
-            self.draw_text_center(self.message, self.font, WHITE, HUD_HEIGHT + 50)
-
-        def draw(self):
-            self.screen.fill(GRASS)
-            self.base.draw(self.screen)
-            for archer in self.archers:
-                archer.draw(self.screen, self.small_font, archer is self.selected)
-
-            for enemy in self.enemies:
-                enemy.draw(self.screen, self.small_font, archer is self.selected)
-
-            for enemy in self.enemies:
-                enemy.draw(self.screen)
-
-            for arrow in self.arrows:
-                arrow.draw(self.screen)
-            self.draw_hud()
-
-            if self.flash > 0:
-                overlay =  pygame.Surface((WIDTH,HEIGHT), pygame.SRCALPHA)
-                overlay.fill((255, 255, 200, int(255 * self.flash / 0.25 * 0.6)))
-                self.screen.blit(overlay, (0,0))
-
-            if self.state == "Paused":
-                self.dim_screen()
-                self.draw_text_center("PAUSED", self.big_font, WHITE, HEIGHT // 2)
-                self.draw_text_center("Press P to resume", self.font, WHITE, HEIGHT // 2 + 50)
-
-            elif self.state == "game over":
-                self.dim.screen()
-                self.draw_text_center("SECTOR LOST", self.big_font, RED, HEIGHT // 2 - 30)
-                self.draw_text_center(f"You reached wave {self.wave} with {self.kills} kills", 
-                                      self.font, WHITE, HEIGHT // 2 + 25)
-
-                self.draw_text_center("Press R to restart", self.font, GOLD, HEIGHT // 2 + 60)
-
-            pygame.display.flip()
-
-        def dim_screen(self):
-              overlay = pygame.Surface((WIDTH, HEIGHT), pygame.SRCALPHA)
-              overlay.fill((0, 0, 0, 150)) 
-              self.screen.blit(overlay, (0,0))
-
-
-        def handle_events(self):
-            for event in pygame.event.get():
-                if event.type == pygame.QUIT:
-                    return False
-
-                if event.type == pygame.KEYDOWN:
-                    if event.key == pygame.K_ESCAPE:
-                        return False
-
-                    elif event.key == pygame.K_r:
-                        self.reset()
-
-                    elif event.key == pygame.K_p:
-                        self.reset()
-
-                        if self.state == "playing":
-                            self.state == "paused"
-
-                        elif self.state == "paused":
-                            self.state == "playing"
-
-                    elif self.state == "playing":
-                        if event.key == pygame.K_SPACE:
-                            self.use.volley()
-
-                        elif event.key == pygame.K_n and not self.wave_active:
-                            self.countdown = 0
-
-                elif event.type == pygame.MOUSEBUTTONDOWN and event.button == 1:
-                    if self.state == "playing":
-                        self.handle_click(event.pos)
-
-            return True
-
-        def run(self):
-            running = True
-            while running:
-                dt = self.clock.tick(FPS) / 1000.0
-                dt = min(dt, 0.05)
-                running = self.handel_events()
-                self.update(dt)
-                self.draw()
-
-            pygame.quit()
-            sys.exit()
-
-if __name__ == "__main__":
-    Game().run()
+        game.update(dt)
+        game.draw(screen)
+
+    elif state == "how_to_play":
+        draw_menu_background(t, dt)
+        screen.blit(panel, (0, 0))
+        screen.blit(logo_1, (80, 100))
+        heading = big_font.render("HOW TO PLAY", True, cream)
+        screen.blit(heading, (80, 185))
+        instructions = [
+            "CLICK THE BATTLEFIELD TO DEPLOY AN ARCHER  -  50 FUNDS",
+            "SELECT AN ARCHER, THEN PRESS U TO UPGRADE",
+            "ARCHERS AUTOMATICALLY ATTACK ENEMIES IN RANGE",
+            "PRESS N TO START THE NEXT WAVE EARLY",
+            "EVERY 10 KILLS UNLOCKS DIVINE VOLLEY  -  SPACE",
+            "PRESS P TO PAUSE  |  R TO RESTART  |  ESC FOR MENU",
+        ]
+        for i, line in enumerate(instructions):
+            rendered = small_font.render(line, True, silver)
+            screen.blit(rendered, (82, 300 + i * 42))
+        hint = tiny_font.render("PRESS ANY KEY OR CLICK TO RETURN", True, GOLD)
+        screen.blit(hint, (82, 590))
+
+    elif state == "settings":
+        draw_menu_background(t, dt)
+        screen.blit(panel, (0, 0))
+        screen.blit(logo_1, (80, 125))
+        heading = big_font.render("SETTINGS", True, cream)
+        screen.blit(heading, (80, 210))
+        message = small_font.render("DISPLAY: 1280 x 720   |   FPS: 60", True, silver)
+        screen.blit(message, (84, 330))
+        hint = tiny_font.render("PRESS ANY KEY OR CLICK TO RETURN", True, GOLD)
+        screen.blit(hint, (84, 390))
 
     pygame.display.flip()
-    
-    pygame.quit()
-    sys.exit()
-    
+
+pygame.quit()
+sys.exit()
