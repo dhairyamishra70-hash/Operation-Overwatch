@@ -11,13 +11,13 @@ import random
 pygame.init()
 
 # window size - we all agreed on 1280 x 720
-width = 1920
-height = 1080
+width = 1280
+height = 720
 screen = pygame.display.set_mode((width, height))
 pygame.display.set_caption("Operation: Overwatch")
 clock = pygame.time.Clock()
 
-# colors I use a lot
+# colors
 bg_color = (4, 6, 10)
 cream = (244, 236, 218)
 silver = (214, 220, 226)
