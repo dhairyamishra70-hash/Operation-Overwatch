@@ -10,10 +10,10 @@ import random
 
 pygame.init()
 
-# window size - we all agreed on 1280 x 720
+# AGme resolution
 width = 1920
 height = 1080
-screen = pygame.display.set_mode((width, height))
+screen = pygame.display.set_mode((width, height), pygame.FULLSCREEN | pygame.SCALED)
 pygame.display.set_caption("Operation: Overwatch")
 clock = pygame.time.Clock()
 
@@ -1192,7 +1192,7 @@ while running:
         screen.blit(logo_1, (80, 125))
         heading = big_font.render("SETTINGS", True, cream)
         screen.blit(heading, (80, 210))
-        message = small_font.render("DISPLAY: 1280 x 720   |   FPS: 60", True, silver)
+        message = small_font.render("DISPLAY: FULLSCREEN   |   FPS: 60", True, silver)
         screen.blit(message, (84, 330))
         hint = tiny_font.render("PRESS ANY KEY OR CLICK TO RETURN", True, GOLD)
         screen.blit(hint, (84, 390))
