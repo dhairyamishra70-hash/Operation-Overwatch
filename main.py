@@ -481,7 +481,7 @@ BLUE = (90, 160, 220)
 GRASS = (24, 39, 35)
 SOIL = (35, 28, 25)
 
-START_FUNDS = 150
+START_FUNDS = 200
 BASE_MAX_HEALTH = 150
 ARCHER_COST = 50
 MAX_ARCHER_LEVEL = 5
@@ -490,15 +490,15 @@ VOLLEY_DAMAGE = 80
 INTERMISSION_TIME = 4.0
 
 ENEMY_TYPES = {
-    "grunt": {
+    "Shadows": {
         "health": 35, "speed": 58, "damage": 12, "reward": 5,
         "radius": 12, "color": (190, 72, 72)
     },
-    "runner": {
+    "Konni": {
         "health": 28, "speed": 112, "damage": 9, "reward": 8,
         "radius": 9, "color": (225, 145, 55)
     },
-    "brute": {
+    "Makarov": {
         "health": 105, "speed": 34, "damage": 25, "reward": 18,
         "radius": 17, "color": (125, 75, 145)
     }
@@ -732,14 +732,14 @@ class Game:
         self.wave += 1
         self.wave_active = True
         count = 4 + 2 * self.wave
-        kinds = ["grunt"]
+        kinds = ["Shadows"]
         weights = [15]
 
         if self.wave >= 2:
-            kinds.append("runner")
+            kinds.append("Konni")
             weights.append(4)
         if self.wave >= 3:
-            kinds.append("brute")
+            kinds.append("Makarov")
             weights.append(2 + self.wave // 3)
 
         self.spawn_queue = random.choices(kinds, weights=weights, k=count)
