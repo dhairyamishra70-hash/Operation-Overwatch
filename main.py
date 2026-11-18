@@ -436,7 +436,7 @@ class MenuItem:
         self.text = text
         self.light = spaced_text(text, font, (205, 212, 218), 3)    # normal text
         self.dark = spaced_text(text, font, (10, 14, 22), 3)        # text on the white pill
-        self.rect = pygame.Rect(70, y, 300, 42)
+        self.rect = pygame.Rect(70, y, 300, 48)
         self.glow = 0.0                                             # 0 = normal, 1 = selected
 
     def draw(self, surface, selected, dt):
@@ -996,10 +996,10 @@ eye = Eye()
 panel = make_panel()
 
 small_font = pygame.font.SysFont("segoeui,arial", 20, bold=True)
-item_font = pygame.font.SysFont("segoeui,arial", 24, bold=True)
+item_font = pygame.font.SysFont("segoeui,arial", 32, bold=True)
 tiny_font = pygame.font.SysFont("segoeui,arial", 15, bold=True)
-logo_small = pygame.font.SysFont("impact,arialblack,arial", 44)
-logo_big = pygame.font.SysFont("impact,arialblack,arial", 88)
+logo_small = pygame.font.SysFont("impact,arialblack,arial", 48)
+logo_big = pygame.font.SysFont("impact,arialblack,arial", 96)
 big_font = pygame.font.SysFont("georgia", 66, bold=True)
 
 logo_1 = spaced_text("OPERATION:", logo_small, cream, 5)
