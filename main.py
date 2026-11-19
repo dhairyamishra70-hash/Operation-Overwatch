@@ -491,15 +491,15 @@ INTERMISSION_TIME = 4.0
 
 ENEMY_TYPES = {
     "Shadows": {
-        "health": 35, "speed": 58, "damage": 12, "reward": 5,
+        "health": 35, "speed": 65, "damage": 15, "reward": 5,
         "radius": 12, "color": (190, 72, 72)
     },
     "Konni": {
-        "health": 28, "speed": 112, "damage": 9, "reward": 8,
+        "health": 28, "speed": 115, "damage": 25, "reward": 8,
         "radius": 9, "color": (225, 145, 55)
     },
     "Makarov": {
-        "health": 105, "speed": 34, "damage": 25, "reward": 18,
+        "health": 105, "speed": 34, "damage": 35, "reward": 18,
         "radius": 17, "color": (125, 75, 145)
     }
 }
