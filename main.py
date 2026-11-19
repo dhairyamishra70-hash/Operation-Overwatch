@@ -498,7 +498,7 @@ ENEMY_TYPES = {
         "health": 28, "speed": 115, "damage": 25, "reward": 8,
         "radius": 9, "color": (225, 145, 55)
     },
-    "Makarov": {
+    "Kortac": {
         "health": 105, "speed": 34, "damage": 35, "reward": 18,
         "radius": 17, "color": (125, 75, 145)
     }
@@ -739,7 +739,7 @@ class Game:
             kinds.append("Konni")
             weights.append(4)
         if self.wave >= 3:
-            kinds.append("Makarov")
+            kinds.append("Kortacs")
             weights.append(2 + self.wave // 3)
 
         self.spawn_queue = random.choices(kinds, weights=weights, k=count)
