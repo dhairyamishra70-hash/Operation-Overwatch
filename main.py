@@ -10,7 +10,7 @@ import random
 
 pygame.init()
 
-# AGme resolution
+# Game resolution
 width = 1920
 height = 1080
 screen = pygame.display.set_mode((width, height), pygame.FULLSCREEN | pygame.SCALED)
